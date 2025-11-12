@@ -1,16 +1,27 @@
-# Customer Registration MCP Server
+# Customer Registration MCP Server & Chatbot
 
-A Model Context Protocol (MCP) server for creating customers via an external API with Bearer token authentication.
+This project provides two main components:
+1. **MCP Server**: A Model Context Protocol server for customer registration via an external API
+2. **AI Chatbot**: An OpenAI GPT-4o-mini powered chatbot that integrates with the MCP server via REST API
 
 ## Features
 
-- ✅ MCP-compliant server implementation
+### MCP Server
+- ✅ MCP-compliant server implementation (stdio transport)
 - ✅ Bearer token authentication
 - ✅ Required field validation (name, email, phone)
 - ✅ Support for all optional customer fields
 - ✅ Comprehensive error handling
 - ✅ Development logging
 - ✅ TypeScript implementation
+
+### AI Chatbot
+- ✅ OpenAI GPT-4o-mini integration
+- ✅ Configurable tone/style via environment variables
+- ✅ REST API endpoint (`/api/chat`)
+- ✅ Automatic MCP tool invocation based on conversation
+- ✅ Conversation history management
+- ✅ Express-based HTTP server
 
 ## Prerequisites
 
@@ -27,22 +38,36 @@ yarn install
 
 2. Configure environment variables:
 
-Create a `.env` file in the root directory:
+Copy the example file and edit with your values:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
 
 ```env
-# Customer API Configuration
+# MCP Server Configuration
 CUSTOMER_API_HOST=https://your-api-host.com
 CUSTOMER_API_TOKEN=your_bearer_token_here
-
-# Development mode (set to 'true' for detailed logging)
 NODE_ENV=development
+
+# Chatbot Configuration
+OPENAI_API_KEY=sk-your-openai-api-key-here
+AGENT_TONE=Professional, helpful, and efficient
+# Alternative: AGENT_STYLE=Encouraging, visionary, witty
+
+# Chatbot Server Port (optional, defaults to 3000)
+CHATBOT_PORT=3000
 ```
+
+**Note**: `AGENT_TONE` or `AGENT_STYLE` controls the chatbot's personality.
 
 ## Usage
 
-### Development Mode
+### Running the MCP Server (standalone)
 
-Run the server with auto-reload:
+**Development Mode:**
 
 ```bash
 yarn dev
@@ -54,18 +79,88 @@ Or with watch mode:
 yarn watch
 ```
 
-### Production Mode
-
-1. Build the project:
+**Production Mode:**
 
 ```bash
+# Build
 yarn build
+
+# Run
+yarn start
 ```
 
-2. Run the compiled server:
+### Running the AI Chatbot Server
+
+**Development Mode:**
 
 ```bash
-yarn start
+yarn chatbot:dev
+```
+
+**Production Mode:**
+
+```bash
+# Build
+yarn chatbot:build
+
+# Run
+yarn chatbot:start
+```
+
+The chatbot server will start on port 3000 (or your configured `CHATBOT_PORT`).
+
+## Chatbot API Endpoints
+
+### POST /api/chat
+
+Send a message to the chatbot:
+
+```bash
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Register a customer: John Doe, john@example.com, +1234567890",
+    "context": {}
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "reply": "Great! I've successfully registered John Doe as a customer. The customer ID is 12345.",
+  "actions": [
+    {
+      "tool": "createCustomer",
+      "input": {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "+1234567890"
+      },
+      "result": {
+        "status": "success",
+        "customerId": 12345,
+        "data": {...}
+      }
+    }
+  ]
+}
+```
+
+### POST /api/chat/reset
+
+Reset the conversation history:
+
+```bash
+curl -X POST http://localhost:3000/api/chat/reset
+```
+
+### GET /health
+
+Health check:
+
+```bash
+curl http://localhost:3000/health
 ```
 
 ## MCP Tool: createCustomer
@@ -159,19 +254,55 @@ To use this server with an MCP-compatible client (like Claude Desktop), add the 
 }
 ```
 
+## How the Chatbot Works
+
+1. User sends a message to `/api/chat`
+2. Chatbot adds message to conversation history
+3. OpenAI GPT-4o-mini processes the message with configured system prompt
+4. If LLM determines an action is needed (e.g., `createCustomer`), it responds with JSON
+5. Chatbot extracts the action and calls MCP server via stdio
+6. MCP server validates data and calls the external customer API
+7. Result is returned to LLM for a friendly follow-up message
+8. Final response sent back to user
+
+## Example Chatbot Conversations
+
+**Simple Registration:**
+
+User: `Register a customer: Jane Smith, jane@smith.com, +1-555-1234`
+
+Chatbot: `I've successfully registered Jane Smith! The customer ID is 67890.`
+
+**Multi-turn Conversation:**
+
+User: `I need to add a new customer`
+
+Chatbot: `I'd be happy to help! I'll need:
+- Full name
+- Email address
+- Phone number`
+
+User: `Name: Bob Johnson, Email: bob@johnson.com, Phone: 555-9876, City: New York`
+
+Chatbot: `Perfect! I've registered Bob Johnson. Customer ID: 11223`
+
 ## Project Structure
 
 ```
-/mcpNova
-  /src
-    /services
-      customerService.ts    # API integration and validation logic
-    index.ts               # MCP server implementation
-  .env                     # Environment variables (not committed)
-  .gitignore              
-  package.json            
-  tsconfig.json           
-  README.md               
+mcpNova/
+├── src/
+│   ├── index.ts                  # MCP Server (stdio)
+│   ├── chatbotServer.ts          # Express REST API server
+│   └── services/
+│       ├── customerService.ts    # Customer API integration
+│       ├── mcpClient.ts          # MCP client (stdio communication)
+│       └── chatbotService.ts     # OpenAI integration & logic
+├── build/                        # Compiled TypeScript
+├── package.json
+├── tsconfig.json
+├── .env                          # Environment variables (gitignored)
+├── .env.example                  # Environment template
+└── README.md
 ```
 
 ## API Endpoint
