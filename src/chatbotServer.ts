@@ -19,6 +19,9 @@ const PORT = process.env.CHATBOT_PORT || 3000;
 // Middleware
 app.use(express.json());
 
+// Serve static files from public directory
+app.use(express.static(path.resolve(__dirname, '../public')));
+
 // Initialize chatbot service
 const mcpServerPath = path.resolve(__dirname, 'index.js');
 const chatbotService = new ChatbotService(mcpServerPath);
