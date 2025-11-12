@@ -1,0 +1,102 @@
+{
+  "name": "customer-registration-server",
+  "version": "1.0.0",
+  "description": "MCP server for customer registration via external API",
+  "mcpVersion": "1.0.0",
+  "tools": [
+    {
+      "name": "createCustomer",
+      "description": "Create a new customer in the external API. Requires name, email, and phone. Supports optional fields like address, UTM parameters, and more.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Customer full name (required)"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer email address (required)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer phone number (required)"
+          },
+          "retention": {
+            "type": "boolean",
+            "description": "Retention flag"
+          },
+          "identification": {
+            "type": "string",
+            "description": "Customer identification document (e.g., CPF)"
+          },
+          "zipcode": {
+            "type": "string",
+            "description": "ZIP/Postal code"
+          },
+          "state": {
+            "type": "string",
+            "description": "State/Province"
+          },
+          "street": {
+            "type": "string",
+            "description": "Street name"
+          },
+          "number": {
+            "type": "string",
+            "description": "Street number"
+          },
+          "neighborhood": {
+            "type": "string",
+            "description": "Neighborhood"
+          },
+          "city": {
+            "type": "string",
+            "description": "City"
+          },
+          "list_ids": {
+            "type": "number",
+            "description": "List ID for categorization"
+          },
+          "create_deal": {
+            "type": "boolean",
+            "description": "Whether to create a deal"
+          },
+          "tags": {
+            "type": "string",
+            "description": "Tags for the customer"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL reference"
+          },
+          "utm_term": {
+            "type": "string",
+            "description": "UTM term parameter"
+          },
+          "utm_medium": {
+            "type": "string",
+            "description": "UTM medium parameter"
+          },
+          "utm_source": {
+            "type": "string",
+            "description": "UTM source parameter"
+          },
+          "utm_campaign": {
+            "type": "string",
+            "description": "UTM campaign parameter"
+          },
+          "company_id": {
+            "type": "string",
+            "description": "Company ID"
+          },
+          "utm_content": {
+            "type": "string",
+            "description": "UTM content parameter"
+          }
+        },
+        "required": ["name", "email", "phone"]
+      }
+    }
+  ]
+}
