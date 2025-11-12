@@ -1,4 +1,5 @@
-import { spawn, ChildProcess } from 'child_process';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { CustomerData } from './customerService.js';
 
 export interface MCPAction {
@@ -9,124 +10,48 @@ export interface MCPAction {
 }
 
 export class MCPClient {
-  private mcpProcess: ChildProcess | null = null;
-  private requestId = 0;
-  private pendingRequests = new Map<number, { resolve: Function; reject: Function }>();
-  private buffer = '';
+  private client: Client | null = null;
+  private transport: StdioClientTransport | null = null;
 
   constructor(private mcpServerPath: string) {}
 
   async initialize(): Promise<void> {
-    if (this.mcpProcess) {
+    if (this.client) {
       return; // Already initialized
     }
 
-    return new Promise((resolve, reject) => {
-      this.mcpProcess = spawn('node', [this.mcpServerPath], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: process.env,
+    console.log('[MCP Client] Initializing with server path:', this.mcpServerPath);
+
+    try {
+      // Create transport
+      this.transport = new StdioClientTransport({
+        command: 'node',
+        args: [this.mcpServerPath],
+        env: process.env as Record<string, string>,
       });
 
-      if (!this.mcpProcess.stdout || !this.mcpProcess.stdin) {
-        reject(new Error('Failed to create MCP process stdio'));
-        return;
-      }
-
-      this.mcpProcess.stdout.on('data', (data: Buffer) => {
-        this.buffer += data.toString();
-        this.processBuffer();
-      });
-
-      this.mcpProcess.stderr?.on('data', (data: Buffer) => {
-        const message = data.toString();
-        if (message.includes('running on stdio')) {
-          resolve();
+      // Create client
+      this.client = new Client(
+        {
+          name: 'chatbot-client',
+          version: '1.0.0',
+        },
+        {
+          capabilities: {},
         }
-      });
+      );
 
-      this.mcpProcess.on('error', (error) => {
-        console.error('[MCP Client] Process error:', error);
-        reject(error);
-      });
+      // Connect
+      await this.client.connect(this.transport);
+      console.log('[MCP Client] Connected successfully');
 
-      this.mcpProcess.on('exit', (code) => {
-        console.error('[MCP Client] Process exited with code:', code);
-        this.mcpProcess = null;
-      });
-
-      // Timeout initialization
-      setTimeout(() => {
-        if (this.mcpProcess) {
-          resolve(); // Resolve anyway after timeout
-        }
-      }, 2000);
-    });
-  }
-
-  private processBuffer(): void {
-    const lines = this.buffer.split('\n');
-    this.buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      
-      try {
-        const response = JSON.parse(line);
-        
-        if (response.id !== undefined && this.pendingRequests.has(response.id)) {
-          const { resolve, reject } = this.pendingRequests.get(response.id)!;
-          this.pendingRequests.delete(response.id);
-          
-          if (response.error) {
-            reject(new Error(response.error.message || 'MCP request failed'));
-          } else {
-            resolve(response.result);
-          }
-        }
-      } catch (error) {
-        console.error('[MCP Client] Failed to parse response:', line);
-      }
+      // List available tools
+      const tools = await this.client.listTools();
+      console.log('[MCP Client] Available tools:', tools.tools.map(t => t.name));
+    } catch (error) {
+      console.error('[MCP Client] Initialization error:', error);
+      throw error;
     }
-  }
-
-  private async sendRequest(method: string, params: any): Promise<any> {
-    if (!this.mcpProcess || !this.mcpProcess.stdin) {
-      await this.initialize();
-    }
-
-    const id = ++this.requestId;
-    const request = {
-      jsonrpc: '2.0',
-      id,
-      method,
-      params,
-    };
-
-    return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
-      
-      const requestStr = JSON.stringify(request) + '\n';
-      this.mcpProcess!.stdin!.write(requestStr);
-
-      // Timeout for request
-      setTimeout(() => {
-        if (this.pendingRequests.has(id)) {
-          this.pendingRequests.delete(id);
-          reject(new Error('MCP request timeout'));
-        }
-      }, 10000);
-    });
-  }
-
-  async listTools(): Promise<any> {
-    return this.sendRequest('tools/list', {});
-  }
-
-  async callTool(name: string, args: any): Promise<any> {
-    return this.sendRequest('tools/call', {
-      name,
-      arguments: args,
-    });
   }
 
   async createCustomer(customerData: CustomerData): Promise<MCPAction> {
@@ -135,17 +60,34 @@ export class MCPClient {
       input: customerData,
     };
 
+    console.log('[MCP Client] Creating customer:', customerData);
+
     try {
-      const result = await this.callTool('createCustomer', customerData);
+      if (!this.client) {
+        await this.initialize();
+      }
+
+      const result = await this.client!.callTool({
+        name: 'createCustomer',
+        arguments: customerData as unknown as Record<string, unknown>,
+      });
+      
+      console.log('[MCP Client] Raw result:', JSON.stringify(result, null, 2));
       
       // Parse the text content from MCP response
-      if (result && result.content && result.content[0]) {
-        const textContent = result.content[0].text;
-        action.result = JSON.parse(textContent);
+      if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
+        const firstContent = result.content[0] as any;
+        if (firstContent && firstContent.text) {
+          action.result = JSON.parse(firstContent.text);
+          console.log('[MCP Client] Parsed result:', action.result);
+        } else {
+          action.result = result;
+        }
       } else {
         action.result = result;
       }
     } catch (error) {
+      console.error('[MCP Client] Error creating customer:', error);
       action.error = error instanceof Error ? error.message : 'Unknown error';
     }
 
@@ -153,10 +95,18 @@ export class MCPClient {
   }
 
   async shutdown(): Promise<void> {
-    if (this.mcpProcess) {
-      this.mcpProcess.kill();
-      this.mcpProcess = null;
+    console.log('[MCP Client] Shutting down');
+    try {
+      if (this.client) {
+        await this.client.close();
+        this.client = null;
+      }
+      if (this.transport) {
+        await this.transport.close();
+        this.transport = null;
+      }
+    } catch (error) {
+      console.error('[MCP Client] Shutdown error:', error);
     }
-    this.pendingRequests.clear();
   }
 }
