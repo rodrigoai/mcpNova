@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server for creating customers via an external API with Bearer token authentication.
 
+<a href="https://glama.ai/mcp/servers/@rodrigoai/mcpNova">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@rodrigoai/mcpNova/badge" alt="Customer Registration Server MCP server" />
+</a>
+
 ## Features
 
 - ✅ MCP-compliant server implementation
