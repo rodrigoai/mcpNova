@@ -4,6 +4,10 @@ This project provides two main components:
 1. **MCP Server**: A Model Context Protocol server for customer registration via an external API
 2. **AI Chatbot**: An OpenAI GPT-4o-mini powered chatbot that integrates with the MCP server via REST API
 
+<a href="https://glama.ai/mcp/servers/@rodrigoai/mcpNova">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@rodrigoai/mcpNova/badge" alt="Customer Registration Server MCP server" />
+</a>
+
 ## Features
 
 ### MCP Server
