@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "render-build": "yarn install && yarn build",
     "dev": "tsx src/index.ts",
-    "start": "node build/index.js",
+    "start": "node build/chatbotServer.js",
     "watch": "tsx watch src/index.ts",
     "chatbot:dev": "tsx src/chatbotServer.ts",
     "chatbot:build": "tsc",
