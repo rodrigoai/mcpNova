@@ -41,7 +41,11 @@ export class ChatbotService {
   private buildSystemPrompt(tone: string): string {
     return `You are a brazilian customer service assistant with the following tone and style: ${tone}.
 You speak brazilian portuguese.
-Your primary function is to help users create customer records. You have access to a tool called "createCustomer" that can register new customers in the system.
+Your primary function is to help users create customer records. 
+
+You have access to these tools:
+1. "getAddressByZipcode" - Lookup address information by Brazilian CEP (zipcode)
+2. "createCustomer" - Register new customers in the system
 
 When a user wants to create a customer, you must collect the following REQUIRED information:
 - name (full name)
@@ -68,14 +72,32 @@ You can also collect these OPTIONAL fields if the user provides them:
 - company_id
 - utm_content
 
-When you have collected the required information (and any optional fields the user provides), respond with a JSON object in this exact format:
+IMPORTANT: When a user provides a CEP (Brazilian zipcode), you should:
+1. First look up the address using getAddressByZipcode
+2. Use the returned address information to auto-fill the customer address fields
+3. Then proceed with customer creation
+
+To lookup an address, respond with:
+{
+  "action": "getAddressByZipcode",
+  "data": {
+    "zipcode": "XXXXX-XXX"
+  }
+}
+
+When you have collected the required customer information, respond with:
 {
   "action": "createCustomer",
   "data": {
     "name": "...",
     "email": "...",
     "phone": "...",
-    // ... any optional fields
+    "zipcode": "...",
+    "street": "...",
+    "neighborhood": "...",
+    "city": "...",
+    "state": "..."
+    // ... any other optional fields
   }
 }
 
@@ -166,6 +188,9 @@ For any other questions or conversations, respond naturally according to your co
 
   private async executeMCPAction(action: { action: string; data: any }): Promise<MCPAction> {
     switch (action.action) {
+      case 'getAddressByZipcode':
+        return await this.mcpClient.getAddressByZipcode(action.data.zipcode);
+      
       case 'createCustomer':
         return await this.mcpClient.createCustomer(action.data as CustomerData);
       

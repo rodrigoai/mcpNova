@@ -8,6 +8,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { config } from 'dotenv';
 import { CustomerService, CustomerData } from './services/customerService.js';
+import { ViaCepService } from './services/viaCepService.js';
 
 // Load environment variables
 config();
@@ -15,6 +16,7 @@ config();
 class CustomerRegistrationServer {
   private server: Server;
   private customerService: CustomerService;
+  private viaCepService: ViaCepService;
 
   constructor() {
     this.server = new Server(
@@ -30,6 +32,7 @@ class CustomerRegistrationServer {
     );
 
     this.customerService = new CustomerService();
+    this.viaCepService = new ViaCepService();
     this.setupHandlers();
     
     // Error handling
@@ -141,6 +144,20 @@ class CustomerRegistrationServer {
             required: ['name', 'email', 'phone'],
           },
         },
+        {
+          name: 'getAddressByZipcode',
+          description: 'Lookup Brazilian address by CEP (zipcode). Returns street, neighborhood, city, state information from ViaCEP API.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              zipcode: {
+                type: 'string',
+                description: 'Brazilian CEP (zipcode) in format XXXXX-XXX or XXXXXXXX (8 digits)',
+              },
+            },
+            required: ['zipcode'],
+          },
+        },
       ],
     }));
 
@@ -168,6 +185,36 @@ class CustomerRegistrationServer {
 
         // Create customer
         const result = await this.customerService.createCustomer(customerData as CustomerData);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (request.params.name === 'getAddressByZipcode') {
+        const { zipcode } = request.params.arguments as { zipcode: string };
+
+        if (!zipcode) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  status: 'error',
+                  error: 'Zipcode is required',
+                }, null, 2),
+              },
+            ],
+          };
+        }
+
+        // Fetch address from ViaCEP
+        const result = await this.viaCepService.getAddressByZipcode(zipcode);
 
         return {
           content: [
