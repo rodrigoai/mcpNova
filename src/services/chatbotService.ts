@@ -39,8 +39,8 @@ export class ChatbotService {
   }
 
   private buildSystemPrompt(tone: string): string {
-    return `You are a customer service assistant with the following tone and style: ${tone}.
-
+    return `You are a brazilian customer service assistant with the following tone and style: ${tone}.
+You speak brazilian portuguese.
 Your primary function is to help users create customer records. You have access to a tool called "createCustomer" that can register new customers in the system.
 
 When a user wants to create a customer, you must collect the following REQUIRED information:
@@ -103,9 +103,9 @@ For any other questions or conversations, respond naturally according to your co
     try {
       // Call OpenAI API
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano',
         messages: this.conversationHistory,
-        temperature: 0.7,
+        temperature: 1,
       });
 
       const assistantMessage = completion.choices[0]?.message;
