@@ -110,4 +110,6 @@ Email validation uses regex pattern: `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
 
 ## Deployment
 
-The project includes `vercel.json` for potential Vercel deployment, though MCP servers typically run locally as stdio processes for MCP client integration.
+MCP servers run as long-running processes on platforms like Railway, Render, or VPS (AWS EC2, DigitalOcean). They communicate via stdio for MCP client integration and can also run a chatbot server with HTTP endpoints.
+
+For deployment details, see [DEPLOYMENT.md](./DEPLOYMENT.md).

@@ -1,10 +1,10 @@
 # Deployment Guide
 
-This project can be deployed in two modes:
+This project is designed to run as a long-running Node.js process with full MCP integration.
 
-## 1. Full Mode (with MCP Integration) - Recommended for VPS/Cloud
+## Deployment Requirements
 
-For platforms that support long-running Node.js processes (AWS EC2, DigitalOcean, Heroku, Railway, Render, etc.)
+For platforms that support long-running Node.js processes (AWS EC2, DigitalOcean, Railway, Render, etc.)
 
 ### Requirements
 - Node.js 18+
@@ -46,46 +46,7 @@ sudo systemctl start chatbot
 
 ---
 
-## 2. Serverless Mode (Vercel) - Limited Functionality
-
-**⚠️ Important Limitations:**
-- MCP server **cannot** run on Vercel (requires stdio/long-running process)
-- Customer creation is **simulated** (not actually created in API)
-- No conversation history between requests
-- OpenAI responds but doesn't execute MCP actions
-
-### Vercel Deployment
-
-1. **Push to GitHub:**
-```bash
-git push origin main
-```
-
-2. **Connect to Vercel:**
-   - Go to [vercel.com](https://vercel.com)
-   - Import your GitHub repository
-   - Configure environment variables in Vercel dashboard
-
-3. **Required Environment Variables in Vercel:**
-```
-OPENAI_API_KEY=sk-your-key
-AGENT_TONE=Professional, helpful, and efficient
-```
-
-4. **Deploy:**
-   - Vercel will auto-deploy on push
-   - Visit your deployment URL
-
-### What Works on Vercel
-- ✅ Chat UI (beautiful interface)
-- ✅ OpenAI conversations
-- ✅ Data collection and formatting
-- ❌ Actual customer creation (MCP not available)
-- ❌ Conversation persistence
-
----
-
-## 3. Recommended Deployment Options
+## Recommended Deployment Options
 
 ### Option A: Railway.app (Easy + Full Features)
 1. Push code to GitHub
@@ -174,11 +135,6 @@ curl -X POST https://your-domain.com/api/chat \
 - MCP process adds ~50MB memory overhead
 - Consider horizontal scaling for > 1000 users
 
-### Serverless Mode (Vercel)
-- Auto-scales to millions of requests
-- Cold starts ~200-500ms
-- No MCP = faster responses
-- Consider for demo/preview only
 
 ---
 
@@ -210,9 +166,6 @@ pm2 logs chatbot
 
 # systemd
 journalctl -u chatbot -f
-
-# Vercel
-vercel logs
 ```
 
 ### Metrics
@@ -242,7 +195,6 @@ vercel logs
 - 1000 requests = ~$0.15
 
 ### Hosting
-- **Vercel**: Free (with limits)
 - **Railway**: $5-20/month
 - **Render**: Free tier available, $7+/month
 - **DigitalOcean**: $6-12/month
