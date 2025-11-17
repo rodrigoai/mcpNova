@@ -1,7 +1,7 @@
-# Customer Registration MCP Server & Chatbot
+# Customer Management & Payment Plans MCP Server & Chatbot
 
 This project provides two main components:
-1. **MCP Server**: A Model Context Protocol server for customer registration via an external API
+1. **MCP Server**: A Model Context Protocol server for customer management, address lookup, and payment plan retrieval
 2. **AI Chatbot**: An OpenAI GPT-4o-mini powered chatbot that integrates with the MCP server via REST API
 
 ## Features
@@ -9,8 +9,11 @@ This project provides two main components:
 ### MCP Server
 - ✅ MCP-compliant server implementation (stdio transport)
 - ✅ Bearer token authentication
-- ✅ Required field validation (name, email, phone)
-- ✅ Support for all optional customer fields
+- ✅ Three integrated tools:
+  - `createCustomer` - Customer registration with validation
+  - `getAddressByZipcode` - Brazilian CEP address lookup
+  - `list_payment_plans` - Payment plan retrieval (credit card, PIX, bank slip)
+- ✅ Required field validation
 - ✅ Comprehensive error handling
 - ✅ Development logging
 - ✅ TypeScript implementation
@@ -51,6 +54,10 @@ Edit `.env`:
 CUSTOMER_API_HOST=https://your-api-host.com
 CUSTOMER_API_TOKEN=your_bearer_token_here
 NODE_ENV=development
+
+# Payment Plans Configuration
+CHECKOUT_ID=your_checkout_id_here
+PRODUCT_ID=36,42
 
 # Chatbot Configuration
 OPENAI_API_KEY=sk-your-openai-api-key-here
@@ -163,7 +170,9 @@ Health check:
 curl http://localhost:3000/health
 ```
 
-## MCP Tool: createCustomer
+## MCP Tools
+
+### Tool 1: createCustomer
 
 ### Required Parameters
 
@@ -234,6 +243,88 @@ curl http://localhost:3000/health
 }
 ```
 
+### Tool 2: getAddressByZipcode
+
+Lookup Brazilian addresses by CEP (zipcode).
+
+#### Required Parameters
+
+- `zipcode` (string): Brazilian CEP in format XXXXX-XXX or XXXXXXXX (8 digits)
+
+#### Example Request
+
+```json
+{
+  "zipcode": "01310-100"
+}
+```
+
+#### Example Success Response
+
+```json
+{
+  "cep": "01310-100",
+  "logradouro": "Avenida Paulista",
+  "bairro": "Bela Vista",
+  "localidade": "São Paulo",
+  "uf": "SP"
+}
+```
+
+### Tool 3: list_payment_plans
+
+Retrieve available payment plans for checkout offers. Configuration is read from environment variables (`CHECKOUT_ID` and `PRODUCT_ID`).
+
+#### Required Parameters
+
+None - the tool uses configuration from environment variables.
+
+#### Configuration (Environment Variables)
+
+- `CHECKOUT_ID` (string): Checkout page identifier
+- `PRODUCT_ID` (string): Comma-separated product IDs (e.g., "36,42")
+
+#### Example Response
+
+```json
+{
+  "checkout_id": "checkout_abc123",
+  "product_id": "36,42",
+  "plans": {
+    "credit_card": [
+      { "installments": 1, "value": 1096.00 },
+      { "installments": 2, "value": 548.00 },
+      { "installments": 3, "value": 365.33 },
+      { "installments": 6, "value": 182.67 },
+      { "installments": 12, "value": 91.33 }
+    ],
+    "pix": [
+      { "value": 1096.00 }
+    ],
+    "bank_slip": [
+      { "value": 1096.00 }
+    ]
+  },
+  "payment_summary": "Temos pagamentos em até 12x de R$ 91,33 no cartão de crédito, ou à vista no PIX por R$ 1.096,00 ou boleto por R$ 1.096,00."
+}
+```
+
+#### Notes
+
+- The API is called once with the full `product_id` string (comma-separated)
+- Backend processes multiple product IDs and returns combined payment conditions
+- Fine, fine_tax, and late_interest fields are automatically ignored
+- Payment summary is generated in Portuguese (Brazil)
+
+#### Example Error Response
+
+```json
+{
+  "error": "Request failed with status code 401",
+  "statusCode": 401
+}
+```
+
 ## Configuring with MCP Clients
 
 To use this server with an MCP-compatible client (like Claude Desktop), add the following to your MCP settings configuration:
@@ -247,7 +338,9 @@ To use this server with an MCP-compatible client (like Claude Desktop), add the 
       "env": {
         "CUSTOMER_API_HOST": "https://your-api-host.com",
         "CUSTOMER_API_TOKEN": "your_bearer_token_here",
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "CHECKOUT_ID": "your_checkout_id",
+        "PRODUCT_ID": "36,42"
       }
     }
   }
@@ -259,32 +352,57 @@ To use this server with an MCP-compatible client (like Claude Desktop), add the 
 1. User sends a message to `/api/chat`
 2. Chatbot adds message to conversation history
 3. OpenAI GPT-4o-mini processes the message with configured system prompt
-4. If LLM determines an action is needed (e.g., `createCustomer`), it responds with JSON
+4. If LLM determines an action is needed (e.g., `createCustomer`, `getAddressByZipcode`, `list_payment_plans`), it responds with JSON
 5. Chatbot extracts the action and calls MCP server via stdio
-6. MCP server validates data and calls the external customer API
-7. Result is returned to LLM for a friendly follow-up message
+6. MCP server executes the appropriate tool:
+   - Customer registration via external API
+   - Address lookup via ViaCEP
+   - Payment plans retrieval via external API
+7. Result is returned to LLM for a friendly follow-up message in Portuguese
 8. Final response sent back to user
 
 ## Example Chatbot Conversations
 
-**Simple Registration:**
+**Customer Registration:**
 
-User: `Register a customer: Jane Smith, jane@smith.com, +1-555-1234`
+User: `Preciso cadastrar um cliente: João Silva, joao@email.com, (11) 98765-4321`
 
-Chatbot: `I've successfully registered Jane Smith! The customer ID is 67890.`
+Chatbot: `Perfeito! Cadastrei o João Silva com sucesso. O ID do cliente é 67890.`
 
-**Multi-turn Conversation:**
+**Address Lookup:**
 
-User: `I need to add a new customer`
+User: `Qual endereço do CEP 01310-100?`
 
-Chatbot: `I'd be happy to help! I'll need:
-- Full name
-- Email address
-- Phone number`
+Chatbot: `O CEP 01310-100 corresponde a:
+- Avenida Paulista
+- Bairro: Bela Vista
+- São Paulo - SP`
 
-User: `Name: Bob Johnson, Email: bob@johnson.com, Phone: 555-9876, City: New York`
+**Payment Plans:**
 
-Chatbot: `Perfect! I've registered Bob Johnson. Customer ID: 11223`
+User: `Quais são as formas de pagamento?`
+
+Chatbot: `Temos as seguintes opções:
+- Cartão de crédito: até 12x de R$ 91,33
+- PIX à vista: R$ 1.096,00
+- Boleto à vista: R$ 1.096,00`
+
+**Multi-turn with Address:**
+
+User: `Quero cadastrar um cliente`
+
+Chatbot: `Claro! Preciso de:
+- Nome completo
+- E-mail
+- Telefone`
+
+User: `Nome: Maria Santos, Email: maria@email.com, Telefone: (21) 99999-8888, CEP: 20040-020`
+
+Chatbot: *(looks up CEP)* `Encontrei o endereço: Avenida Rio Branco, Centro, Rio de Janeiro - RJ. Vou cadastrar a Maria Santos com essas informações.`
+
+*(creates customer)*
+
+Chatbot: `Pronto! Maria Santos cadastrada com sucesso. ID: 11223`
 
 ## Project Structure
 
@@ -295,6 +413,8 @@ mcpNova/
 │   ├── chatbotServer.ts          # Express REST API server
 │   └── services/
 │       ├── customerService.ts    # Customer API integration
+│       ├── viaCepService.ts      # Brazilian address lookup
+│       ├── paymentPlansService.ts # Payment plans retrieval
 │       ├── mcpClient.ts          # MCP client (stdio communication)
 │       └── chatbotService.ts     # OpenAI integration & logic
 ├── build/                        # Compiled TypeScript

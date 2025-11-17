@@ -9,6 +9,7 @@ import {
 import { config } from 'dotenv';
 import { CustomerService, CustomerData } from './services/customerService.js';
 import { ViaCepService } from './services/viaCepService.js';
+import { PaymentPlansService } from './services/paymentPlansService.js';
 
 // Load environment variables
 config();
@@ -17,6 +18,7 @@ class CustomerRegistrationServer {
   private server: Server;
   private customerService: CustomerService;
   private viaCepService: ViaCepService;
+  private paymentPlansService: PaymentPlansService;
 
   constructor() {
     this.server = new Server(
@@ -33,6 +35,7 @@ class CustomerRegistrationServer {
 
     this.customerService = new CustomerService();
     this.viaCepService = new ViaCepService();
+    this.paymentPlansService = new PaymentPlansService();
     this.setupHandlers();
     
     // Error handling
@@ -158,6 +161,15 @@ class CustomerRegistrationServer {
             required: ['zipcode'],
           },
         },
+        {
+          name: 'list_payment_plans',
+          description: 'Retrieve available payment plans for checkout offers. Returns credit card installments, PIX, and bank slip options with a human-friendly summary. Configuration (checkout_id and product_id) is read from environment variables.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
       ],
     }));
 
@@ -215,6 +227,20 @@ class CustomerRegistrationServer {
 
         // Fetch address from ViaCEP
         const result = await this.viaCepService.getAddressByZipcode(zipcode);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (request.params.name === 'list_payment_plans') {
+        // Fetch payment plans from API
+        const result = await this.paymentPlansService.listPaymentPlans();
 
         return {
           content: [

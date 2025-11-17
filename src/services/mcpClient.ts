@@ -134,6 +134,46 @@ export class MCPClient {
     return action;
   }
 
+  async listPaymentPlans(): Promise<MCPAction> {
+    const action: MCPAction = {
+      tool: 'list_payment_plans',
+      input: {},
+    };
+
+    console.log('[MCP Client] Fetching payment plans');
+
+    try {
+      if (!this.client) {
+        await this.initialize();
+      }
+
+      const result = await this.client!.callTool({
+        name: 'list_payment_plans',
+        arguments: {},
+      });
+      
+      console.log('[MCP Client] Raw result:', JSON.stringify(result, null, 2));
+      
+      // Parse the text content from MCP response
+      if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
+        const firstContent = result.content[0] as any;
+        if (firstContent && firstContent.text) {
+          action.result = JSON.parse(firstContent.text);
+          console.log('[MCP Client] Parsed result:', action.result);
+        } else {
+          action.result = result;
+        }
+      } else {
+        action.result = result;
+      }
+    } catch (error) {
+      console.error('[MCP Client] Error fetching payment plans:', error);
+      action.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    return action;
+  }
+
   async shutdown(): Promise<void> {
     console.log('[MCP Client] Shutting down');
     try {

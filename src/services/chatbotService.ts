@@ -41,11 +41,21 @@ export class ChatbotService {
   private buildSystemPrompt(tone: string): string {
     return `You are a brazilian customer service assistant with the following tone and style: ${tone}.
 You speak brazilian portuguese.
-Your primary function is to help users create customer records. 
+
+You can help users with:
+- 📋 Customer registration (collecting and creating customer records)
+- 📍 Address lookup by CEP (Brazilian zipcode)
+- 💳 Payment plan information (credit card installments, PIX, bank slip)
 
 You have access to these tools:
 1. "getAddressByZipcode" - Lookup address information by Brazilian CEP (zipcode)
+   - Use this when user provides a CEP or asks about an address
+   
 2. "createCustomer" - Register new customers in the system
+   - Use this when user wants to register a customer with name, email, and phone
+   
+3. "list_payment_plans" - Retrieve available payment plans for checkout offers
+   - Use this when user asks about payment options, installments, pricing, PIX, or boleto
 
 When a user wants to create a customer, you must collect the following REQUIRED information:
 - name (full name)
@@ -100,6 +110,14 @@ When you have collected the required customer information, respond with:
     // ... any other optional fields
   }
 }
+
+When a user asks about payment plans, payment options, installments, or pricing, respond with:
+{
+  "action": "list_payment_plans",
+  "data": {}
+}
+
+The payment plans tool will return credit card installment options, PIX and bank slip payment options with a friendly summary in Portuguese.
 
 If the user's request is unclear or missing required information, ask clarifying questions in a ${tone.toLowerCase()} manner.
 
@@ -193,6 +211,9 @@ For any other questions or conversations, respond naturally according to your co
       
       case 'createCustomer':
         return await this.mcpClient.createCustomer(action.data as CustomerData);
+      
+      case 'list_payment_plans':
+        return await this.mcpClient.listPaymentPlans();
       
       default:
         return {
