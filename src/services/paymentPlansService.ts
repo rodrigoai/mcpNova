@@ -33,8 +33,7 @@ export interface PaymentPlansErrorResponse {
 }
 
 interface ApiPaymentCondition {
-  installments?: number;
-  number?: number;
+  number?: number; // Number of installments (maps to installments in our response)
   value: number;
   fine?: number;
   fine_tax?: number;
@@ -145,10 +144,10 @@ export class PaymentPlansService {
         bank_slip: [],
       };
 
-      // Extract credit card installments (ignore fine, fine_tax, late_interest)
+      // Extract credit card installments (map API's 'number' to 'installments', ignore fine, fine_tax, late_interest)
       if (response.data.credit_card && Array.isArray(response.data.credit_card)) {
         plans.credit_card = response.data.credit_card.map((item) => ({
-          installments: item.number || 1,
+          installments: item.number || 1, // API returns 'number', we map it to 'installments'
           value: item.value,
         }));
       }
