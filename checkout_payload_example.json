@@ -1,0 +1,74 @@
+{
+    "customer_data_at": "first_step",
+    "gateway": "pagarme",
+    "main_color": "#1E1E2D",
+    "menus": [
+        {
+            "url": "https://nova.money",
+            "description": "Sobre"
+        }
+    ],
+    "page_title": "Atom Concursos + Garantia",
+    "id": "3724cee5-2bc7-469c-9aad-9a0c31b181e8",
+    "public_key": "pk_test_OjV6NDMcPaszNJ3q",
+    "logo": "/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBY2c9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--e6754d44be57cb3b4b70c34047ea2ee4119996f9/Fancy%20Logo.png",
+    "products": [
+        {
+            "type": "offer",
+            "id": 45,
+            "name": "Ingresso Individual",
+            "description": "Bloco de carnaval mais tradicional do Vale do Paraíba",
+            "product_type": "product",
+            "subscription": false,
+            "interval": null,
+            "value": 100.0,
+            "image": "/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBWkU9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--3788a25a7d97b69075f90ec4e464ae3094ea6889/blin.jpg",
+            "allow_quantity": true,
+            "max_quantity": 3
+        }
+    ],
+    "order_bump_products": [
+        {
+            "type": "order_bump",
+            "id": 44,
+            "name": "BELGIAN BRIGADIER - 25 Units",
+            "description": "BELGIAN BRIGADIER - 25 Units - Repete",
+            "product_type": "service",
+            "subscription": false,
+            "interval": null,
+            "value": 110.0,
+            "image": "/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBmQT09IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--b03918a7d855063f7cae749e25d5df099cf08205/belgian-bri.jpg",
+            "allow_quantity": false,
+            "max_quantity": 1
+        }
+    ],
+    "currency": "brl",
+    "subscription": false,
+    "enable_coupons": true,
+    "index_on_search_engines": true,
+    "require_scheduling": false,
+    "enable_two_cards": false,
+    "company_id": 5,
+    "custom_code": {
+        "page_body": "",
+        "items_area": "\r\n",
+        "page_footer": "",
+        "page_header": "",
+        "payment_page": "",
+        "success_page": "",
+        "first_column_footer": "",
+        "second_column_footer": ""
+    },
+    "default_payment_plan": {
+        "id": "3-1",
+        "installments": 1,
+        "payment_method": "bank_slip"
+    },
+    "integrations": {
+        "google_tag": "",
+        "meta_pixel": {
+            "value": "",
+            "enable_conversion_for_pix_and_bank_slip": false
+        }
+    }
+}

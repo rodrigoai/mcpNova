@@ -16,6 +16,7 @@ export class ChatbotService {
   private openai: OpenAI;
   private mcpClient: MCPClient;
   private systemPrompt: string;
+  private model: string;
   private conversationHistory: OpenAI.Chat.ChatCompletionMessageParam[] = [];
 
   constructor(mcpServerPath: string) {
@@ -26,11 +27,14 @@ export class ChatbotService {
 
     this.openai = new OpenAI({ apiKey });
     this.mcpClient = new MCPClient(mcpServerPath);
-    
+
     // Build system prompt from configurable tone/style
     const agentTone = process.env.AGENT_TONE || process.env.AGENT_STYLE || 'Professional, helpful, and efficient';
     this.systemPrompt = this.buildSystemPrompt(agentTone);
-    
+
+    // Set model from env or default
+    this.model = process.env.OPENAI_MODEL || 'gpt-5-nano';
+
     // Initialize conversation with system prompt
     this.conversationHistory.push({
       role: 'system',
@@ -56,6 +60,9 @@ You have access to these tools:
    
 3. "list_payment_plans" - Retrieve available payment plans for checkout offers
    - Use this when user asks about payment options, installments, pricing, PIX, or boleto
+
+4. "list_checkout_offers" - Retrieve and list all offer-type products from a checkout page
+   - Use this when user asks for offers, products, prices, or what is available for sale
 
 When a user wants to create a customer, you must collect the following REQUIRED information:
 - name (full name)
@@ -117,6 +124,12 @@ When a user asks about payment plans, payment options, installments, or pricing,
   "data": {}
 }
 
+When a user asks for offers, products, or prices (and not specifically payment plans), respond with:
+{
+  "action": "list_checkout_offers",
+  "data": {}
+}
+
 The payment plans tool will return credit card installment options, PIX and bank slip payment options with a friendly summary in Portuguese.
 
 If the user's request is unclear or missing required information, ask clarifying questions in a ${tone.toLowerCase()} manner.
@@ -135,7 +148,7 @@ For any other questions or conversations, respond naturally according to your co
     // Add user message to history
     this.conversationHistory.push({
       role: 'user',
-      content: context 
+      content: context
         ? `${message}\n\nAdditional context: ${JSON.stringify(context)}`
         : message,
     });
@@ -143,7 +156,7 @@ For any other questions or conversations, respond naturally according to your co
     try {
       // Call OpenAI API
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-5-nano',
+        model: this.model,
         messages: this.conversationHistory,
         temperature: 1,
       });
@@ -163,7 +176,7 @@ For any other questions or conversations, respond naturally according to your co
 
       // Check if the response contains an action to execute
       const action = this.extractAction(responseContent);
-      
+
       if (action) {
         // Execute the MCP action
         const mcpAction = await this.executeMCPAction(action);
@@ -171,7 +184,7 @@ For any other questions or conversations, respond naturally according to your co
 
         // Generate a friendly response based on the action result
         const followUpMessage = await this.generateFollowUpResponse(mcpAction);
-        
+
         return {
           reply: followUpMessage,
           actions,
@@ -208,13 +221,16 @@ For any other questions or conversations, respond naturally according to your co
     switch (action.action) {
       case 'getAddressByZipcode':
         return await this.mcpClient.getAddressByZipcode(action.data.zipcode);
-      
+
       case 'createCustomer':
         return await this.mcpClient.createCustomer(action.data as CustomerData);
-      
+
       case 'list_payment_plans':
         return await this.mcpClient.listPaymentPlans();
-      
+
+      case 'list_checkout_offers':
+        return await this.mcpClient.listCheckoutOffers();
+
       default:
         return {
           tool: action.action,
@@ -236,13 +252,13 @@ For any other questions or conversations, respond naturally according to your co
     });
 
     const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: this.model,
       messages: this.conversationHistory,
-      temperature: 0.7,
+      temperature: 1,
     });
 
     const response = completion.choices[0]?.message?.content || 'Action completed.';
-    
+
     // Add this to history
     this.conversationHistory.push({
       role: 'assistant',

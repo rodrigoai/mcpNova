@@ -23,7 +23,13 @@ app.use(express.json());
 app.use(express.static(path.resolve(__dirname, '../public')));
 
 // Initialize chatbot service
-const mcpServerPath = path.resolve(__dirname, 'index.js');
+// Initialize chatbot service
+// Determine if we're running from source (TS) or build (JS)
+const isTs = path.extname(__filename) === '.ts';
+const mcpServerPath = isTs
+  ? path.resolve(__dirname, 'index.ts')
+  : path.resolve(__dirname, 'index.js');
+
 const chatbotService = new ChatbotService(mcpServerPath);
 
 // Initialize MCP client on startup
@@ -60,7 +66,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     res.json(response);
   } catch (error) {
     console.error('[Chatbot Server] Error processing chat request:', error);
-    
+
     res.status(500).json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error',
@@ -75,7 +81,7 @@ app.post('/api/chat/reset', (req: Request, res: Response) => {
     res.json({ status: 'success', message: 'Conversation reset' });
   } catch (error) {
     console.error('[Chatbot Server] Error resetting conversation:', error);
-    
+
     res.status(500).json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error',
@@ -94,9 +100,9 @@ app.use((req: Request, res: Response) => {
 // Graceful shutdown
 const shutdown = async () => {
   console.log('[Chatbot Server] Shutting down gracefully...');
-  
+
   await chatbotService.shutdown();
-  
+
   process.exit(0);
 };
 
@@ -106,7 +112,7 @@ process.on('SIGTERM', shutdown);
 // Error handler
 app.use((err: Error, req: Request, res: Response, next: Function) => {
   console.error('[Chatbot Server] Unhandled error:', err);
-  
+
   res.status(500).json({
     error: 'Internal server error',
     details: err.message,
@@ -119,7 +125,7 @@ app.listen(PORT, () => {
   console.log(`[Chatbot Server] Chat endpoint: POST http://localhost:${PORT}/api/chat`);
   console.log(`[Chatbot Server] Health check: GET http://localhost:${PORT}/health`);
   console.log(`[Chatbot Server] Reset conversation: POST http://localhost:${PORT}/api/chat/reset`);
-  
+
   const agentTone = process.env.AGENT_TONE || process.env.AGENT_STYLE || 'Professional, helpful, and efficient';
   console.log(`[Chatbot Server] Agent tone: ${agentTone}`);
 });

@@ -13,7 +13,7 @@ export class MCPClient {
   private client: Client | null = null;
   private transport: StdioClientTransport | null = null;
 
-  constructor(private mcpServerPath: string) {}
+  constructor(private mcpServerPath: string) { }
 
   async initialize(): Promise<void> {
     if (this.client) {
@@ -24,9 +24,13 @@ export class MCPClient {
 
     try {
       // Create transport
+      const isDev = process.env.NODE_ENV === 'development';
+      const command = isDev ? 'npx' : 'node';
+      const args = isDev ? ['tsx', this.mcpServerPath] : [this.mcpServerPath];
+
       this.transport = new StdioClientTransport({
-        command: 'node',
-        args: [this.mcpServerPath],
+        command,
+        args,
         env: process.env as Record<string, string>,
       });
 
@@ -71,9 +75,9 @@ export class MCPClient {
         name: 'getAddressByZipcode',
         arguments: { zipcode } as Record<string, unknown>,
       });
-      
+
       console.log('[MCP Client] Raw result:', JSON.stringify(result, null, 2));
-      
+
       // Parse the text content from MCP response
       if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
         const firstContent = result.content[0] as any;
@@ -111,9 +115,9 @@ export class MCPClient {
         name: 'createCustomer',
         arguments: customerData as unknown as Record<string, unknown>,
       });
-      
+
       console.log('[MCP Client] Raw result:', JSON.stringify(result, null, 2));
-      
+
       // Parse the text content from MCP response
       if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
         const firstContent = result.content[0] as any;
@@ -151,9 +155,9 @@ export class MCPClient {
         name: 'list_payment_plans',
         arguments: {},
       });
-      
+
       console.log('[MCP Client] Raw result:', JSON.stringify(result, null, 2));
-      
+
       // Parse the text content from MCP response
       if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
         const firstContent = result.content[0] as any;
@@ -168,6 +172,46 @@ export class MCPClient {
       }
     } catch (error) {
       console.error('[MCP Client] Error fetching payment plans:', error);
+      action.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    return action;
+  }
+
+  async listCheckoutOffers(): Promise<MCPAction> {
+    const action: MCPAction = {
+      tool: 'list_checkout_offers',
+      input: {},
+    };
+
+    console.log('[MCP Client] Fetching checkout offers');
+
+    try {
+      if (!this.client) {
+        await this.initialize();
+      }
+
+      const result = await this.client!.callTool({
+        name: 'list_checkout_offers',
+        arguments: {},
+      });
+
+      console.log('[MCP Client] Raw result:', JSON.stringify(result, null, 2));
+
+      // Parse the text content from MCP response
+      if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
+        const firstContent = result.content[0] as any;
+        if (firstContent && firstContent.text) {
+          action.result = JSON.parse(firstContent.text);
+          console.log('[MCP Client] Parsed result:', action.result);
+        } else {
+          action.result = result;
+        }
+      } else {
+        action.result = result;
+      }
+    } catch (error) {
+      console.error('[MCP Client] Error fetching checkout offers:', error);
       action.error = error instanceof Error ? error.message : 'Unknown error';
     }
 

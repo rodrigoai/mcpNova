@@ -61,6 +61,7 @@ PRODUCT_ID=36,42
 
 # Chatbot Configuration
 OPENAI_API_KEY=sk-your-openai-api-key-here
+OPENAI_MODEL=gpt-5-nano
 AGENT_TONE=Professional, helpful, and efficient
 # Alternative: AGENT_STYLE=Encouraging, visionary, witty
 

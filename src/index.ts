@@ -10,6 +10,7 @@ import { config } from 'dotenv';
 import { CustomerService, CustomerData } from './services/customerService.js';
 import { ViaCepService } from './services/viaCepService.js';
 import { PaymentPlansService } from './services/paymentPlansService.js';
+import { CheckoutService } from './services/checkoutService.js';
 
 // Load environment variables
 config();
@@ -19,6 +20,7 @@ class CustomerRegistrationServer {
   private customerService: CustomerService;
   private viaCepService: ViaCepService;
   private paymentPlansService: PaymentPlansService;
+  private checkoutService: CheckoutService;
 
   constructor() {
     this.server = new Server(
@@ -36,13 +38,14 @@ class CustomerRegistrationServer {
     this.customerService = new CustomerService();
     this.viaCepService = new ViaCepService();
     this.paymentPlansService = new PaymentPlansService();
+    this.checkoutService = new CheckoutService();
     this.setupHandlers();
-    
+
     // Error handling
     this.server.onerror = (error) => {
       console.error('[MCP Error]', error);
     };
-    
+
     process.on('SIGINT', async () => {
       await this.server.close();
       process.exit(0);
@@ -170,6 +173,15 @@ class CustomerRegistrationServer {
             required: [],
           },
         },
+        {
+          name: 'list_checkout_offers',
+          description: 'Retrieve and list all offer-type products from a checkout page. The checkout_id is provided through the environment variable CHECKOUT_ID. Returns an array of offer objects containing name, description, value, and image.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
       ],
     }));
 
@@ -241,6 +253,20 @@ class CustomerRegistrationServer {
       if (request.params.name === 'list_payment_plans') {
         // Fetch payment plans from API
         const result = await this.paymentPlansService.listPaymentPlans();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (request.params.name === 'list_checkout_offers') {
+        // Fetch checkout offers
+        const result = await this.checkoutService.listCheckoutOffers();
 
         return {
           content: [
