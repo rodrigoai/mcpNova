@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
     chatForm.addEventListener('submit', handleSubmit);
     resetBtn.addEventListener('click', handleReset);
-    
+
     // Handle Enter key (submit) and Shift+Enter (new line)
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -29,7 +29,7 @@ function setupEventListeners() {
             chatForm.requestSubmit();
         }
     });
-    
+
     // Auto-resize textarea
     messageInput.addEventListener('input', autoResizeTextarea);
 }
@@ -43,23 +43,23 @@ function autoResizeTextarea() {
 // Handle form submission
 async function handleSubmit(e) {
     e.preventDefault();
-    
+
     const message = messageInput.value.trim();
     if (!message || isTyping) return;
-    
+
     // Clear input
     messageInput.value = '';
     autoResizeTextarea();
-    
+
     // Add user message
     addMessage(message, 'user');
-    
+
     // Disable input while processing
     setInputState(false);
-    
+
     // Show typing indicator
     const typingId = showTypingIndicator();
-    
+
     try {
         // Send message to API
         const response = await fetch(`${API_BASE_URL}/api/chat`, {
@@ -69,19 +69,19 @@ async function handleSubmit(e) {
             },
             body: JSON.stringify({ message }),
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Remove typing indicator
         removeTypingIndicator(typingId);
-        
+
         // Add bot response
         addMessage(data.reply, 'bot', data.actions);
-        
+
     } catch (error) {
         console.error('Error:', error);
         removeTypingIndicator(typingId);
@@ -97,12 +97,12 @@ async function handleReset() {
     if (!confirm('Are you sure you want to reset the conversation?')) {
         return;
     }
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/api/chat/reset`, {
             method: 'POST',
         });
-        
+
         if (response.ok) {
             // Clear messages except welcome message
             const welcomeMessage = messagesContainer.firstElementChild;
@@ -110,7 +110,7 @@ async function handleReset() {
             if (welcomeMessage) {
                 messagesContainer.appendChild(welcomeMessage);
             }
-            
+
             // Show success notification
             showNotification('Conversation reset successfully!', 'success');
         }
@@ -124,9 +124,9 @@ async function handleReset() {
 function addMessage(text, sender, actions = null, isError = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message-slide-in mb-4';
-    
+
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
+
     if (sender === 'user') {
         messageDiv.innerHTML = `
             <div class="flex items-start justify-end space-x-3">
@@ -146,7 +146,7 @@ function addMessage(text, sender, actions = null, isError = false) {
     } else {
         const actionsHtml = actions && actions.length > 0 ? generateActionsHtml(actions) : '';
         const errorClass = isError ? 'from-red-500 to-red-600' : 'from-indigo-500 to-purple-600';
-        
+
         messageDiv.innerHTML = `
             <div class="flex items-start space-x-3">
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${errorClass}">
@@ -156,7 +156,7 @@ function addMessage(text, sender, actions = null, isError = false) {
                 </div>
                 <div class="flex-1">
                     <div class="rounded-2xl rounded-tl-none bg-gradient-to-br ${errorClass} px-4 py-3 shadow-md">
-                        <p class="text-sm font-medium leading-relaxed text-white whitespace-pre-wrap">${escapeHtml(text)}</p>
+                        <div class="text-sm font-medium leading-relaxed text-white whitespace-pre-wrap">${text}</div>
                     </div>
                     ${actionsHtml}
                     <span class="mt-1 block text-xs text-gray-500">${timestamp}</span>
@@ -164,7 +164,7 @@ function addMessage(text, sender, actions = null, isError = false) {
             </div>
         `;
     }
-    
+
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
 }
@@ -172,9 +172,9 @@ function addMessage(text, sender, actions = null, isError = false) {
 // Generate actions HTML (for customer creation results)
 function generateActionsHtml(actions) {
     if (!actions || actions.length === 0) return '';
-    
+
     let html = '<div class="mt-2 space-y-2">';
-    
+
     actions.forEach(action => {
         if (action.result && action.result.status === 'success') {
             html += `
@@ -204,7 +204,7 @@ function generateActionsHtml(actions) {
             `;
         }
     });
-    
+
     html += '</div>';
     return html;
 }
@@ -233,11 +233,11 @@ function showTypingIndicator() {
             </div>
         </div>
     `;
-    
+
     messagesContainer.appendChild(typingDiv);
     scrollToBottom();
     isTyping = true;
-    
+
     return id;
 }
 
@@ -254,7 +254,7 @@ function removeTypingIndicator(id) {
 function setInputState(enabled) {
     messageInput.disabled = !enabled;
     sendBtn.disabled = !enabled;
-    
+
     if (enabled) {
         messageInput.classList.remove('opacity-50', 'cursor-not-allowed');
         sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -280,12 +280,12 @@ function escapeHtml(text) {
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
-    
+
     notification.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 message-slide-in`;
     notification.textContent = message;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.style.opacity = '0';
         notification.style.transform = 'translateY(-10px)';

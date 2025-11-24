@@ -48,6 +48,27 @@ export class CheckoutService {
         }
     }
 
+    private async resolveRedirect(url: string): Promise<string> {
+        try {
+            const response = await axios.get(url, {
+                maxRedirects: 0,
+                validateStatus: (status) => status >= 200 && status < 400,
+            });
+
+            if (response.status === 302 || response.status === 301) {
+                const location = response.headers.location;
+                if (location) {
+                    return location;
+                }
+            }
+            return url;
+        } catch (error) {
+            // If error (e.g. network error), return original URL
+            this.log('Error resolving redirect for URL:', url);
+            return url;
+        }
+    }
+
     async listCheckoutOffers(): Promise<Offer[]> {
         const url = `${this.apiHost}/api/v1/checkout_pages/${this.checkoutId}`;
 
@@ -64,13 +85,18 @@ export class CheckoutService {
             this.log('Response status:', response.status);
             // this.log('Response data:', JSON.stringify(response.data, null, 2));
 
-            const offers = response.data.products
+            const offers = await Promise.all(response.data.products
                 .filter((product) => product.type === 'offer')
-                .map((product) => ({
-                    name: product.name,
-                    description: product.description,
-                    value: product.value,
-                    image: product.image,
+                .map(async (product) => {
+                    const initialUrl = product.image.startsWith('http') ? product.image : `${this.apiHost}${product.image}`;
+                    const finalUrl = await this.resolveRedirect(initialUrl);
+
+                    return {
+                        name: product.name,
+                        description: product.description,
+                        value: product.value,
+                        image: finalUrl,
+                    };
                 }));
 
             return offers;

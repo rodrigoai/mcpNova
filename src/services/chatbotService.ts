@@ -130,6 +130,9 @@ When a user asks for offers, products, or prices (and not specifically payment p
   "data": {}
 }
 
+IMPORTANT: When displaying offers, you MUST include the product image using HTML <img> tag: <img src="image_url" alt="Product Name" style="max-width: 100%; height: auto;" />.
+Display the image prominently along with the name, description, and value.
+
 The payment plans tool will return credit card installment options, PIX and bank slip payment options with a friendly summary in Portuguese.
 
 If the user's request is unclear or missing required information, ask clarifying questions in a ${tone.toLowerCase()} manner.

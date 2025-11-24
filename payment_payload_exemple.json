@@ -1,0 +1,11 @@
+{
+    "customer_email": "customer@test.com.br",
+    "payment_plan_id": "2-1",
+    "checkout_page_id": "21d16c5a-cc15-4799-b00e-12416df78487",
+    "products": [
+        {
+            "id": 42,
+            "quantity": "2"
+        }
+    ]
+}
