@@ -11,6 +11,7 @@ import { CustomerService, CustomerData } from './services/customerService.js';
 import { ViaCepService } from './services/viaCepService.js';
 import { PaymentPlansService } from './services/paymentPlansService.js';
 import { CheckoutService } from './services/checkoutService.js';
+import { PaymentService, PaymentPayload } from './services/paymentService.js';
 
 // Load environment variables
 config();
@@ -21,6 +22,7 @@ class CustomerRegistrationServer {
   private viaCepService: ViaCepService;
   private paymentPlansService: PaymentPlansService;
   private checkoutService: CheckoutService;
+  private paymentService: PaymentService;
 
   constructor() {
     this.server = new Server(
@@ -39,6 +41,7 @@ class CustomerRegistrationServer {
     this.viaCepService = new ViaCepService();
     this.paymentPlansService = new PaymentPlansService();
     this.checkoutService = new CheckoutService();
+    this.paymentService = new PaymentService();
     this.setupHandlers();
 
     // Error handling
@@ -58,7 +61,9 @@ class CustomerRegistrationServer {
       tools: [
         {
           name: 'createCustomer',
-          description: 'Create a new customer in the external API. Requires name, email, and phone. Supports optional fields like address, UTM parameters, and more.',
+          description: `Register a new customer in the system. This tool must be used everytime a customer send any information about himself.
+          Required fields: name, email, phone, zipcode and identification.
+          Optional fields include address details, UTM parameters, and tags. Returns a success and proceed to show the offers using the mcp tool 'list_checkout_offers'.`,
           inputSchema: {
             type: 'object',
             properties: {
@@ -147,26 +152,17 @@ class CustomerRegistrationServer {
                 description: 'UTM content parameter',
               },
             },
-            required: ['name', 'email', 'phone'],
+            required: ['name', 'email', 'phone', 'zipcode', 'identification'],
           },
         },
-        {
-          name: 'getAddressByZipcode',
-          description: 'Lookup Brazilian address by CEP (zipcode). Returns street, neighborhood, city, state information from ViaCEP API.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              zipcode: {
-                type: 'string',
-                description: 'Brazilian CEP (zipcode) in format XXXXX-XXX or XXXXXXXX (8 digits)',
-              },
-            },
-            required: ['zipcode'],
-          },
-        },
+
         {
           name: 'list_payment_plans',
-          description: 'Retrieve available payment plans for checkout offers. Returns credit card installments, PIX, and bank slip options with a human-friendly summary. Configuration (checkout_id and product_id) is read from environment variables.',
+          description: `Retrieve available payment options (PIX, bank slip) 
+          for the user to CHOOSE FROM. Use this tool BEFORE the user makes a purchase decision to show them what options are available. 
+          If the user already selected a payment plan, do not use this tool. This tool returns the payment plan IDs along with other details.
+          This tool should be used every time the user asks for the list of payment plans or any other payment-type doubt.
+          `,
           inputSchema: {
             type: 'object',
             properties: {},
@@ -175,11 +171,58 @@ class CustomerRegistrationServer {
         },
         {
           name: 'list_checkout_offers',
-          description: 'Retrieve and list all offer-type products from a checkout page. The checkout_id is provided through the environment variable CHECKOUT_ID. Returns an array of offer objects containing name, description, value, and image.',
+          description: `Retrieve and list all offer-type products from a checkout page. 
+          The checkout_id is provided through the environment variable CHECKOUT_ID.
+          Returns an array of offer objects containing the id, name, description, value, and image.
+          This tool should be used every time the user asks for the list of products, offers, products options or any other product-type doubt.
+          `,
           inputSchema: {
             type: 'object',
             properties: {},
             required: [],
+          },
+        },
+        {
+          name: 'createPayment',
+          description: `EXECUTE the purchase and show the qrcode image in the response.
+          Use this tool ONLY AFTER the user has selected a specific payment plan from the tool list_payment_plans, 
+          offers from the tool list_checkout_offers and quantity. After this tool is used, show the payment status and qrcode image in the response if it is pix or the link for download if it is bank_slip. 
+          In both cases, the status should be "pending" and the qrcode image or link should be displayed in the response.`,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              customer_email: {
+                type: 'string',
+                description: 'Customer email address',
+              },
+              payment_plan_id: {
+                type: 'string',
+                description: 'Selected payment plan ID by the tool list_payment_plans',
+              },
+              checkout_page_id: {
+                type: 'string',
+                description: 'Checkout page ID provided by the tool list_checkout_offers',
+              },
+              products: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: {
+                      type: 'number',
+                      description: 'Product ID',
+                    },
+                    quantity: {
+                      type: 'string',
+                      description: 'Product quantity',
+                    },
+                  },
+                  required: ['id', 'quantity'],
+                },
+                description: 'List of products to purchase provided by the tool list_checkout_offers',
+              },
+            },
+            required: ['customer_email', 'payment_plan_id', 'checkout_page_id', 'products'],
           },
         },
       ],
@@ -188,7 +231,7 @@ class CustomerRegistrationServer {
     // Handle tool calls
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (request.params.name === 'createCustomer') {
-        const customerData = request.params.arguments as Partial<CustomerData>;
+        let customerData = request.params.arguments as Partial<CustomerData>;
 
         // Validate required fields
         const validation = this.customerService.validateRequiredFields(customerData);
@@ -207,6 +250,32 @@ class CustomerRegistrationServer {
           };
         }
 
+        // Fetch address from ViaCEP if zipcode is provided
+        if (customerData.zipcode) {
+          const addressResult = await this.viaCepService.getAddressByZipcode(customerData.zipcode);
+          if (addressResult.status === 'success' && addressResult.address) {
+            const addressFields = this.viaCepService.convertToCustomerAddress(addressResult.address);
+            // Merge address fields into customerData, preferring existing data if any (though usually tool call won't have them if we just asked for zipcode)
+            // Actually, we want to use the fetched address.
+            customerData = { ...customerData, ...addressFields };
+          } else {
+            // If address lookup fails, we might want to return an error or proceed.
+            // Given the requirement "make the createCustomer tool ask for the zipcode as required info and call the ViaCepService itself",
+            // implying we rely on it. Let's return error if zipcode is invalid.
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'error',
+                    error: `Invalid zipcode or address not found: ${addressResult.error || 'Unknown error'}`,
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+        }
+
         // Create customer
         const result = await this.customerService.createCustomer(customerData as CustomerData);
 
@@ -220,35 +289,7 @@ class CustomerRegistrationServer {
         };
       }
 
-      if (request.params.name === 'getAddressByZipcode') {
-        const { zipcode } = request.params.arguments as { zipcode: string };
 
-        if (!zipcode) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  status: 'error',
-                  error: 'Zipcode is required',
-                }, null, 2),
-              },
-            ],
-          };
-        }
-
-        // Fetch address from ViaCEP
-        const result = await this.viaCepService.getAddressByZipcode(zipcode);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
 
       if (request.params.name === 'list_payment_plans') {
         // Fetch payment plans from API
@@ -267,6 +308,22 @@ class CustomerRegistrationServer {
       if (request.params.name === 'list_checkout_offers') {
         // Fetch checkout offers
         const result = await this.checkoutService.listCheckoutOffers();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (request.params.name === 'createPayment') {
+        const payload = request.params.arguments as unknown as PaymentPayload;
+
+        // Create payment
+        const result = await this.paymentService.createPayment(payload);
 
         return {
           content: [

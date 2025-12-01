@@ -6,11 +6,13 @@ export interface PaymentPlanConfig {
 }
 
 export interface InstallmentOption {
+  id: string;
   installments: number;
   value: number;
 }
 
 export interface SinglePaymentOption {
+  id: string;
   value: number;
 }
 
@@ -33,6 +35,7 @@ export interface PaymentPlansErrorResponse {
 }
 
 interface ApiPaymentCondition {
+  id?: string;
   number?: number; // Number of installments (maps to installments in our response)
   value: number;
   fine?: number;
@@ -147,6 +150,7 @@ export class PaymentPlansService {
       // Extract credit card installments (map API's 'number' to 'installments', ignore fine, fine_tax, late_interest)
       if (response.data.credit_card && Array.isArray(response.data.credit_card)) {
         plans.credit_card = response.data.credit_card.map((item) => ({
+          id: item.id || '',
           installments: item.number || 1, // API returns 'number', we map it to 'installments'
           value: item.value,
         }));
@@ -155,6 +159,7 @@ export class PaymentPlansService {
       // Extract pix single payment
       if (response.data.pix && Array.isArray(response.data.pix)) {
         plans.pix = response.data.pix.map((item) => ({
+          id: item.id || '',
           value: item.value,
         }));
       }
@@ -162,6 +167,7 @@ export class PaymentPlansService {
       // Extract bank slip single payment
       if (response.data.bank_slip && Array.isArray(response.data.bank_slip)) {
         plans.bank_slip = response.data.bank_slip.map((item) => ({
+          id: item.id || '',
           value: item.value,
         }));
       }

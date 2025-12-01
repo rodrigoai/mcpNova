@@ -73,7 +73,11 @@ export class CustomerService {
       return {
         status: 'success',
         customerId: response.data.id || response.data.customerId,
-        data: response.data,
+        data: (() => {
+          const data = { ...response.data };
+          delete data.meta._checkout_url;
+          return data;
+        })(),
       };
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -86,7 +90,7 @@ export class CustomerService {
 
         return {
           status: 'error',
-          error: axiosError.response?.data 
+          error: axiosError.response?.data
             ? JSON.stringify(axiosError.response.data)
             : axiosError.message,
           statusCode: axiosError.response?.status,

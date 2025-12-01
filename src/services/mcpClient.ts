@@ -218,6 +218,70 @@ export class MCPClient {
     return action;
   }
 
+  async createPayment(paymentData: any): Promise<MCPAction> {
+    const action: MCPAction = {
+      tool: 'createPayment',
+      input: paymentData,
+    };
+
+    console.log('[MCP Client] Creating payment:', paymentData);
+
+    try {
+      if (!this.client) {
+        await this.initialize();
+      }
+
+      const result = await this.client!.callTool({
+        name: 'createPayment',
+        arguments: paymentData as unknown as Record<string, unknown>,
+      });
+
+      console.log('[MCP Client] Raw result:', JSON.stringify(result, null, 2));
+
+      // Parse the text content from MCP response
+      if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
+        const firstContent = result.content[0] as any;
+        if (firstContent && firstContent.text) {
+          action.result = JSON.parse(firstContent.text);
+          console.log('[MCP Client] Parsed result:', action.result);
+        } else {
+          action.result = result;
+        }
+      } else {
+        action.result = result;
+      }
+    } catch (error) {
+      console.error('[MCP Client] Error creating payment:', error);
+      action.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    return action;
+  }
+
+  async getToolsForOpenAI(): Promise<any[]> {
+    if (!this.client) {
+      await this.initialize();
+    }
+
+    try {
+      const toolsList = await this.client!.listTools();
+      console.log('[MCP Client] Fetched tools for OpenAI:', toolsList.tools.map(t => t.name));
+
+      // Convert MCP tools to OpenAI function calling format
+      return toolsList.tools.map(tool => ({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.inputSchema,
+        },
+      }));
+    } catch (error) {
+      console.error('[MCP Client] Error fetching tools:', error);
+      return [];
+    }
+  }
+
   async shutdown(): Promise<void> {
     console.log('[MCP Client] Shutting down');
     try {

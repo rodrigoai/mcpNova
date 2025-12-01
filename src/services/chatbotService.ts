@@ -18,6 +18,7 @@ export class ChatbotService {
   private systemPrompt: string;
   private model: string;
   private conversationHistory: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+  private tools: OpenAI.Chat.ChatCompletionTool[] = [];
 
   constructor(mcpServerPath: string) {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -43,105 +44,47 @@ export class ChatbotService {
   }
 
   private buildSystemPrompt(tone: string): string {
-    return `You are a brazilian customer service assistant with the following tone and style: ${tone}.
+    return `You are a brazilian seller assistant with the following tone and style: ${tone}.
 You speak brazilian portuguese.
 
-You can help users with:
-- 📋 Customer registration (collecting and creating customer records)
-- 📍 Address lookup by CEP (Brazilian zipcode)
-- 💳 Payment plan information (credit card installments, PIX, bank slip)
+Your goal is to help customers complete their purchase. Follow this conversation flow:
 
-You have access to these tools:
-1. "getAddressByZipcode" - Lookup address information by Brazilian CEP (zipcode)
-   - Use this when user provides a CEP or asks about an address
+1. **Customer Registration**: Collect customer information (name, email, phone, zipcode, identification). Once you have all required details, use the "createCustomer" tool. The tool will automatically look up the address using the zipcode.
+
+2. **Show Products**: After customer registration, use the "list_checkout_offers" tool to display available products. When showing offers, ALWAYS include product images using HTML <img> tags: <img src="image_url" alt="Product Name" style="max-width: 100%; height: auto;" />. Ask the customer to choose a product and quantity.
+
+3. **Payment Options**: Use the "list_payment_plans" tool to show available payment methods (PIX and bank slip). Ask the customer to choose their preferred payment method.
+
+4. **Complete Purchase**: Once you have:
+   - Customer email
+   - Selected payment plan ID
+   - Selected checkout page ID
+   - Product(s) with quantities
    
-2. "createCustomer" - Register new customers in the system
-   - Use this when user wants to register a customer with name, email, and phone
-   
-3. "list_payment_plans" - Retrieve available payment plans for checkout offers
-   - Use this when user asks about payment options, installments, pricing, PIX, or boleto
+   Use the "createPayment" tool to finalize the purchase.
 
-4. "list_checkout_offers" - Retrieve and list all offer-type products from a checkout page
-   - Use this when user asks for offers, products, prices, or what is available for sale
+5. **Show Payment Details**: After payment creation:
+   - For PIX: Display the QR code image using <img src="pix_qr_code_url" alt="PIX QR Code" style="max-width: 300px;" />
+   - For bank slip: Provide the download link
+   - Show payment status and expiration time
 
-When a user wants to create a customer, you must collect the following REQUIRED information:
-- name (full name)
-- email (valid email address)
-- phone (phone number)
-
-You can also collect these OPTIONAL fields if the user provides them:
-- retention (boolean)
-- identification (e.g., CPF)
-- zipcode
-- state
-- street
-- number
-- neighborhood
-- city
-- list_ids (number)
-- create_deal (boolean)
-- tags
-- url
-- utm_term
-- utm_medium
-- utm_source
-- utm_campaign
-- company_id
-- utm_content
-
-IMPORTANT: When a user provides a CEP (Brazilian zipcode), you should:
-1. First look up the address using getAddressByZipcode
-2. Use the returned address information to auto-fill the customer address fields
-3. Then proceed with customer creation
-
-To lookup an address, respond with:
-{
-  "action": "getAddressByZipcode",
-  "data": {
-    "zipcode": "XXXXX-XXX"
-  }
-}
-
-When you have collected the required customer information, respond with:
-{
-  "action": "createCustomer",
-  "data": {
-    "name": "...",
-    "email": "...",
-    "phone": "...",
-    "zipcode": "...",
-    "street": "...",
-    "neighborhood": "...",
-    "city": "...",
-    "state": "..."
-    // ... any other optional fields
-  }
-}
-
-When a user asks about payment plans, payment options, installments, or pricing, respond with:
-{
-  "action": "list_payment_plans",
-  "data": {}
-}
-
-When a user asks for offers, products, or prices (and not specifically payment plans), respond with:
-{
-  "action": "list_checkout_offers",
-  "data": {}
-}
-
-IMPORTANT: When displaying offers, you MUST include the product image using HTML <img> tag: <img src="image_url" alt="Product Name" style="max-width: 100%; height: auto;" />.
-Display the image prominently along with the name, description, and value.
-
-The payment plans tool will return credit card installment options, PIX and bank slip payment options with a friendly summary in Portuguese.
-
-If the user's request is unclear or missing required information, ask clarifying questions in a ${tone.toLowerCase()} manner.
-
-For any other questions or conversations, respond naturally according to your configured tone.`;
+**Important guidelines**:
+- Always be ${tone.toLowerCase()}
+- Ask clarifying questions if information is missing
+- Use the available tools to retrieve and display information
+- Display images prominently for products and QR codes
+- Be concise and direct
+- Only help with purchase-related questions
+- Never suggest sending information via email
+`;
   }
 
   async initialize(): Promise<void> {
     await this.mcpClient.initialize();
+
+    // Fetch and store tools for OpenAI function calling
+    this.tools = await this.mcpClient.getToolsForOpenAI();
+    console.log('[Chatbot] Loaded tools for OpenAI:', this.tools.map((t: any) => t.function.name));
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
@@ -157,45 +100,89 @@ For any other questions or conversations, respond naturally according to your co
     });
 
     try {
-      // Call OpenAI API
-      const completion = await this.openai.chat.completions.create({
+      // Call OpenAI API with tools
+      console.log('[Chatbot] Calling OpenAI with', this.tools.length, 'tools available');
+      console.log('[Chatbot] Tools:', JSON.stringify(this.tools.map((t: any) => t.function.name)));
+
+      let completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: this.conversationHistory,
+        tools: this.tools.length > 0 ? this.tools : undefined,
+        tool_choice: this.tools.length > 0 ? 'auto' : undefined,
         temperature: 1,
       });
 
-      const assistantMessage = completion.choices[0]?.message;
-      if (!assistantMessage || !assistantMessage.content) {
+      let assistantMessage = completion.choices[0]?.message;
+      if (!assistantMessage) {
         throw new Error('No response from OpenAI');
       }
 
-      const responseContent = assistantMessage.content;
-
-      // Add assistant response to history
-      this.conversationHistory.push({
-        role: 'assistant',
-        content: responseContent,
+      console.log('[Chatbot] Assistant message:', {
+        content: assistantMessage.content?.substring(0, 100),
+        tool_calls: assistantMessage.tool_calls?.length || 0,
+        finish_reason: completion.choices[0]?.finish_reason
       });
 
-      // Check if the response contains an action to execute
-      const action = this.extractAction(responseContent);
+      // Add assistant response to history
+      this.conversationHistory.push(assistantMessage);
 
-      if (action) {
-        // Execute the MCP action
-        const mcpAction = await this.executeMCPAction(action);
-        actions.push(mcpAction);
+      // Check if the assistant wants to call tools
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        console.log('[Chatbot] Tool calls requested:', assistantMessage.tool_calls.map(tc => tc.type === 'function' ? tc.function.name : 'unknown'));
 
-        // Generate a friendly response based on the action result
-        const followUpMessage = await this.generateFollowUpResponse(mcpAction);
+        // Execute each tool call
+        for (const toolCall of assistantMessage.tool_calls) {
+          // Only handle function tool calls
+          if (toolCall.type !== 'function') {
+            continue;
+          }
+
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments);
+
+          console.log(`[Chatbot] Executing tool: ${functionName}`, functionArgs);
+
+          // Execute the MCP action
+          const mcpAction = await this.executeMCPAction({
+            action: functionName,
+            data: functionArgs,
+          });
+          actions.push(mcpAction);
+
+          // Add tool result to conversation history
+          this.conversationHistory.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(mcpAction.result || { error: mcpAction.error }),
+          });
+        }
+
+        // Make another API call to get the final response with tool results
+        completion = await this.openai.chat.completions.create({
+          model: this.model,
+          messages: this.conversationHistory,
+          tools: this.tools.length > 0 ? this.tools : undefined,
+          tool_choice: this.tools.length > 0 ? 'auto' : undefined,
+          temperature: 1,
+        });
+
+        assistantMessage = completion.choices[0]?.message;
+        if (!assistantMessage || !assistantMessage.content) {
+          throw new Error('No response from OpenAI after tool execution');
+        }
+
+        // Add final response to history
+        this.conversationHistory.push(assistantMessage);
 
         return {
-          reply: followUpMessage,
+          reply: assistantMessage.content,
           actions,
         };
       }
 
+      // No tool calls, return the assistant's response directly
       return {
-        reply: responseContent,
+        reply: assistantMessage.content || 'I apologize, but I was unable to generate a response.',
         actions,
       };
     } catch (error) {
@@ -222,8 +209,7 @@ For any other questions or conversations, respond naturally according to your co
 
   private async executeMCPAction(action: { action: string; data: any }): Promise<MCPAction> {
     switch (action.action) {
-      case 'getAddressByZipcode':
-        return await this.mcpClient.getAddressByZipcode(action.data.zipcode);
+
 
       case 'createCustomer':
         return await this.mcpClient.createCustomer(action.data as CustomerData);
@@ -233,6 +219,9 @@ For any other questions or conversations, respond naturally according to your co
 
       case 'list_checkout_offers':
         return await this.mcpClient.listCheckoutOffers();
+
+      case 'createPayment':
+        return await this.mcpClient.createPayment(action.data);
 
       default:
         return {
@@ -244,14 +233,52 @@ For any other questions or conversations, respond naturally according to your co
   }
 
   private async generateFollowUpResponse(mcpAction: MCPAction): Promise<string> {
-    const resultSummary = mcpAction.error
-      ? `Error: ${mcpAction.error}`
-      : `Success: ${JSON.stringify(mcpAction.result, null, 2)}`;
+    let resultSummary: string;
+
+    if (mcpAction.error) {
+      resultSummary = `Error: ${mcpAction.error}`;
+    } else {
+      // Extract only relevant information based on the tool type
+      switch (mcpAction.tool) {
+        case 'createCustomer':
+          const customerResult = mcpAction.result;
+          if (customerResult?.status === 'success') {
+            resultSummary = `Customer created successfully with email: ${customerResult.customer?.email || 'N/A'}`;
+          } else {
+            resultSummary = `Customer creation failed: ${customerResult?.error || 'Unknown error'}`;
+          }
+          break;
+
+
+
+        case 'list_payment_plans':
+        case 'list_checkout_offers':
+          // For list operations, provide the full result as it contains data to display
+          resultSummary = `Data retrieved successfully: ${JSON.stringify(mcpAction.result, null, 2)}`;
+          break;
+
+        case 'createPayment':
+          const paymentResult = mcpAction.result;
+          if (paymentResult?.status === 'success') {
+            resultSummary = `Payment created successfully. Payment ID: ${paymentResult.payment_id || 'N/A'}, Status: ${paymentResult.payment_status || 'N/A'}`;
+            if (paymentResult.pix_qr_code_url) {
+              resultSummary += `, PIX QR Code available`;
+            }
+          } else {
+            resultSummary = `Payment creation failed: ${paymentResult?.error || 'Unknown error'}`;
+          }
+          break;
+
+        default:
+          // For unknown tools, provide minimal JSON
+          resultSummary = `Success: ${JSON.stringify(mcpAction.result, null, 2)}`;
+      }
+    }
 
     // Ask OpenAI to generate a friendly response
     this.conversationHistory.push({
       role: 'system',
-      content: `The ${mcpAction.tool} action was executed with the following result:\n${resultSummary}\n\nGenerate a friendly response to inform the user about the result.`,
+      content: `The ${mcpAction.tool} action was executed with the following result:\n${resultSummary}\n\nGenerate a friendly, natural response in Brazilian Portuguese to inform the user about the result. Do not include raw JSON in your response. For createCustomer, confirm the customer was created and proceed to the next step.`,
     });
 
     const completion = await this.openai.chat.completions.create({
