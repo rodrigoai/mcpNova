@@ -168,15 +168,29 @@ Your goal is to help customers complete their purchase. Follow this conversation
         });
 
         assistantMessage = completion.choices[0]?.message;
-        if (!assistantMessage || !assistantMessage.content) {
+        if (!assistantMessage) {
           throw new Error('No response from OpenAI after tool execution');
         }
+
+        console.log('[Chatbot] Post-tool assistant message:', {
+          content: assistantMessage.content?.substring(0, 100),
+          has_tool_calls: !!assistantMessage.tool_calls?.length,
+          finish_reason: completion.choices[0]?.finish_reason
+        });
 
         // Add final response to history
         this.conversationHistory.push(assistantMessage);
 
+        // Check if assistant wants to make another tool call (recursive)
+        if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+          console.log('[Chatbot] Assistant wants to make another tool call after initial tools');
+          // Recursively handle this by making another chat call
+          // We've already added the message to history, so just make the API call again
+          return this.continueToolCalling(actions);
+        }
+
         return {
-          reply: assistantMessage.content,
+          reply: assistantMessage.content || 'Action completed successfully.',
           actions,
         };
       }
@@ -190,6 +204,79 @@ Your goal is to help customers complete their purchase. Follow this conversation
       console.error('[Chatbot] Error:', error);
       throw error;
     }
+  }
+
+  private async continueToolCalling(existingActions: MCPAction[]): Promise<ChatResponse> {
+    // Continue processing tool calls recursively
+    console.log('[Chatbot] Continuing with more tool calls...');
+
+    const lastMessage = this.conversationHistory[this.conversationHistory.length - 1];
+    const actions: MCPAction[] = [...existingActions];
+
+    if (lastMessage.role === 'assistant' && lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
+      // Execute each tool call
+      for (const toolCall of lastMessage.tool_calls) {
+        if (toolCall.type !== 'function') {
+          continue;
+        }
+
+        const functionName = toolCall.function.name;
+        const functionArgs = JSON.parse(toolCall.function.arguments);
+
+        console.log(`[Chatbot] Executing additional tool: ${functionName}`, functionArgs);
+
+        const mcpAction = await this.executeMCPAction({
+          action: functionName,
+          data: functionArgs,
+        });
+        actions.push(mcpAction);
+
+        // Add tool result to conversation history
+        this.conversationHistory.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(mcpAction.result || { error: mcpAction.error }),
+        });
+      }
+
+      // Make another API call to get the final response
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: this.conversationHistory,
+        tools: this.tools.length > 0 ? this.tools : undefined,
+        tool_choice: this.tools.length > 0 ? 'auto' : undefined,
+        temperature: 1,
+      });
+
+      const assistantMessage = completion.choices[0]?.message;
+      if (!assistantMessage) {
+        throw new Error('No response from OpenAI during recursive tool execution');
+      }
+
+      console.log('[Chatbot] Recursive post-tool assistant message:', {
+        content: assistantMessage.content?.substring(0, 100),
+        has_tool_calls: !!assistantMessage.tool_calls?.length,
+        finish_reason: completion.choices[0]?.finish_reason
+      });
+
+      this.conversationHistory.push(assistantMessage);
+
+      // Check if we need to recurse again
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        return this.continueToolCalling(actions);
+      }
+
+      return {
+        reply: assistantMessage.content || 'Actions completed successfully.',
+        actions,
+      };
+    }
+
+    // Fallback if no tool calls found
+    return {
+      reply: 'Actions completed.',
+      actions,
+    };
   }
 
   private extractAction(response: string): { action: string; data: any } | null {
